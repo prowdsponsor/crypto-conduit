@@ -266,12 +266,13 @@ conduitDecryptOfb = conduitEncryptOfb
 conduitEncryptCtr :: (Resource m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
+                  -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
                   -> Conduit B.ByteString m B.ByteString
-conduitEncryptCtr k iv =
+conduitEncryptCtr k iv incIV =
     blockCipherConduit k
       StrictBlockSize
       iv
-      (\iv' input -> let !iv''  = C.incIV iv'
+      (\iv' input -> let !iv''  = incIV iv'
                          output = C.encryptBlock k (S.encode iv') `zwp` input
                      in (iv'', output))
       (\iv' input -> let output = C.encryptBlock k (S.encode iv') `zwp` input
@@ -283,6 +284,7 @@ conduitEncryptCtr k iv =
 conduitDecryptCtr :: (Resource m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
+                  -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
                   -> Conduit B.ByteString m B.ByteString
 conduitDecryptCtr = conduitEncryptCtr
 
