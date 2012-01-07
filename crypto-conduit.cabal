@@ -50,6 +50,6 @@ Test-suite runtests
 
     -- finally, our own package
     crypto-conduit
-  GHC-options: -Wall -O0
+  GHC-options: -Wall
   Hs-source-dirs: tests
   Main-is: runtests.hs
