@@ -2,17 +2,12 @@
 
 -- from base
 import Control.Applicative ((<$>))
-import Control.Arrow (first)
 import Control.Monad.ST (runST)
-import Data.Bits (xor)
 import Data.Word (Word8)
 
 -- from bytestring
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
-
--- from cereal
-import qualified Data.Serialize as S
 
 -- from crypto-api
 import Crypto.Classes ((.::.))
