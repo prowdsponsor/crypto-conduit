@@ -399,6 +399,8 @@ blockCipherConduit key mode initialState apply final = blocked mode blockSize =$
       push state (Full input) =
           let (!state', !output) = apply state input
           in return (state', Producing [output])
+      push _ (LastOne input) | B.null input =
+          return (error "blockCipherConduit", Finished Nothing [])
       push state (LastOne input) = mk <$> final state input
           where mk output = (error "blockCipherConduit", Finished Nothing [output])
 
