@@ -355,7 +355,9 @@ blocked mode blockSize = conduitState B.empty push close
               | otherwise               = blockStrict (Full this : acc) rest
               where (this, rest) = B.splitAt blockSize bs
 
-          blockAny bs = first ((:[]) . Full) $ B.splitAt (n * blockSize) bs
+          blockAny bs
+              | n >= 1    = first ((:[]) . Full) $ B.splitAt (n * blockSize) bs
+              | otherwise = ([], bs)
               where n = B.length bs `div` blockSize
 
       append bs1 bs2
