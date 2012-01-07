@@ -121,29 +121,59 @@ testBlockCipher undefinedKey = do
       blockSize = (C.blockSize .::. k) `div` 8
 
   prop "works with conduitEncryptEcb" $
-    testBlockCipherConduit (Just blockSize) (conduitEncryptEcb k) (C.ecb k)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitEncryptEcb k)
+      (C.ecb k)
   prop "works with conduitDecryptEcb" $
-    testBlockCipherConduit (Just blockSize) (conduitDecryptEcb k) (C.unEcb k)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitDecryptEcb k)
+      (C.unEcb k)
 
   prop "works with conduitEncryptCbc" $
-    testBlockCipherConduit (Just blockSize) (conduitEncryptCbc k C.zeroIV) (fst . C.cbc k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitEncryptCbc k C.zeroIV)
+      (fst . C.cbc k C.zeroIV)
   prop "works with conduitDecryptCbc" $
-    testBlockCipherConduit (Just blockSize) (conduitDecryptCbc k C.zeroIV) (fst . C.unCbc k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitDecryptCbc k C.zeroIV)
+      (fst . C.unCbc k C.zeroIV)
 
   prop "works with conduitEncryptCfb" $
-    testBlockCipherConduit (Just blockSize) (conduitEncryptCfb k C.zeroIV) (fst . C.cfb k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitEncryptCfb k C.zeroIV)
+      (fst . C.cfb k C.zeroIV)
   prop "works with conduitDecryptCfb" $
-    testBlockCipherConduit (Just blockSize) (conduitDecryptCfb k C.zeroIV) (fst . C.unCfb k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitDecryptCfb k C.zeroIV)
+      (fst . C.unCfb k C.zeroIV)
 
   prop "works with conduitEncryptOfb" $
-    testBlockCipherConduit (Just blockSize) (conduitEncryptOfb k C.zeroIV) (fst . C.ofb k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitEncryptOfb k C.zeroIV)
+      (fst . C.ofb k C.zeroIV)
   prop "works with conduitDecryptOfb" $
-    testBlockCipherConduit (Just blockSize) (conduitDecryptOfb k C.zeroIV) (fst . C.unOfb k C.zeroIV)
+    testBlockCipherConduit
+      (Just blockSize)
+      (conduitDecryptOfb k C.zeroIV)
+      (fst . C.unOfb k C.zeroIV)
 
   prop "works with conduitEncryptCtr" $
-    testBlockCipherConduit Nothing (conduitEncryptCtr k C.zeroIV C.incIV) (fst . C.ctr C.incIV k C.zeroIV)
+    testBlockCipherConduit
+      Nothing
+      (conduitEncryptCtr k C.zeroIV C.incIV)
+      (fst . C.ctr C.incIV k C.zeroIV)
   prop "works with conduitDecryptCtr" $
-    testBlockCipherConduit Nothing (conduitDecryptCtr k C.zeroIV C.incIV) (fst . C.unCtr C.incIV k C.zeroIV)
+    testBlockCipherConduit
+      Nothing
+      (conduitDecryptCtr k C.zeroIV C.incIV)
+      (fst . C.unCtr C.incIV k C.zeroIV)
 
   it "works with sourceCtr" $
     let len :: Num a => a
