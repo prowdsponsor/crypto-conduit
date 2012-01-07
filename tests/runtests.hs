@@ -25,6 +25,7 @@ import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
+import Data.Conduit.Binary (isolate)
 import Data.Conduit.List (sourceList, consume)
 
 -- from cryptocipher
@@ -148,6 +149,13 @@ testBlockCipher undefinedKey = do
     testBlockCipherConduit blockSize (conduitEncryptCtr k C.zeroIV C.incIV) (fst . C.ctr C.incIV k C.zeroIV)
   prop "works with conduitDecryptCtr" $
     testBlockCipherConduit blockSize (conduitDecryptCtr k C.zeroIV C.incIV) (fst . C.unCtr C.incIV k C.zeroIV)
+
+  it "works with sourceCtr" $
+    let len :: Num a => a
+        len = 1024 * 1024 -- 1 MiB
+        r1 = runPureResource $ sourceCtr k C.zeroIV $$ isolate len =$ consumeAsLazy
+        r2 = fst $ C.ctr C.incIV k C.zeroIV (L.replicate len 0)
+    in r1 == r2
 
   prop "works with sinkCbcMac" $
     \input -> let inputL = fixBlockedSize blockSize (L.pack input)
