@@ -149,6 +149,11 @@ testBlockCipher undefinedKey = do
   prop "works with conduitDecryptCtr" $
     testBlockCipherConduit blockSize (conduitDecryptCtr k C.zeroIV C.incIV) (fst . C.unCtr C.incIV k C.zeroIV)
 
+  prop "works with sinkCbcMac" $
+    \input -> let inputL = fixBlockedSize blockSize (L.pack input)
+                  r1 = runPureResource $ sourceList (L.toChunks inputL) $$ sinkCbcMac k
+                  r2 = B.concat $ L.toChunks $ C.cbcMac k inputL
+              in r1 == r2
 
 
 testBlockCipherConduit ::
@@ -158,11 +163,7 @@ testBlockCipherConduit ::
     -> [Word8]
     -> Bool
 testBlockCipherConduit blockSize conduit lazyfun input =
-    let preinputL  = L.pack input
-        blockSize' = fromIntegral blockSize
-        toFill     = let leftovers = L.length preinputL `mod` blockSize'
-                     in if leftovers == 0 then 0 else blockSize' - leftovers
-        inputL     = L.append preinputL $ L.replicate toFill 0xFF
+    let inputL = fixBlockedSize blockSize (L.pack input)
         r1 = runPureResource $ sourceList (L.toChunks inputL) $$ conduit =$ consumeAsLazy
         r2 = lazyfun inputL
     in r1 == r2
@@ -176,3 +177,10 @@ runPureResource r = runST (runResourceT r)
 
 consumeAsLazy :: Resource m => Sink B.ByteString m L.ByteString
 consumeAsLazy = L.fromChunks <$> consume
+
+fixBlockedSize :: C.ByteLength -> L.ByteString -> L.ByteString
+fixBlockedSize blockSize lbs =
+    let blockSize' = fromIntegral blockSize
+        toFill     = let leftovers = L.length lbs `mod` blockSize'
+                     in if leftovers == 0 then 0 else blockSize' - leftovers
+    in L.append lbs $ L.replicate toFill 0xFF
