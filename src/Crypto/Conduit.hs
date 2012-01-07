@@ -189,8 +189,8 @@ conduitDecryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
       (S.encode iv)
-      (\iv' input -> let inter = C.decryptBlock k input
-                     in (inter, iv' `zwp` inter))
+      (\iv' input -> let output = C.decryptBlock k input `zwp` iv'
+                     in (input, output))
       (\_ _ -> fail "conduitDecryptCbc: input has an incomplete final block.")
 
 
