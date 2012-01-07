@@ -17,6 +17,7 @@ Description:
 
 Extra-source-files:
   README
+  tests/runtests.hs
 
 Source-repository head
   Type:     git
