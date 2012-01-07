@@ -43,12 +43,13 @@ Test-suite runtests
     crypto-api   >= 0.8 && < 0.9,
     conduit      >= 0.0 && < 0.1,
 
+    cryptocipher == 0.3.*,
     cryptohash   == 0.7.*,
     skein        == 0.1.*,
     hspec        == 0.9.*,
 
     -- finally, our own package
     crypto-conduit
-  GHC-options: -Wall
+  GHC-options: -Wall -O0
   Hs-source-dirs: tests
   Main-is: runtests.hs

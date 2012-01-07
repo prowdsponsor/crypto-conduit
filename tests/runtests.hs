@@ -5,6 +5,7 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.Monad.ST (runST)
 import Data.Bits (xor)
+import Data.Word (Word8)
 
 -- from bytestring
 import qualified Data.ByteString as B
@@ -24,7 +25,10 @@ import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
-import Data.Conduit.List (sourceList)
+import Data.Conduit.List (sourceList, consume)
+
+-- from cryptocipher
+import Crypto.Cipher.AES (AES128, AES192, AES256)
 
 -- from cryptohash
 import Crypto.Hash.MD2 (MD2)
@@ -53,6 +57,7 @@ import Crypto.Conduit
 
 
 
+main :: IO ()
 main = hspecX $ do
   describe "cryptohash's MD2"        $ testHash (undefined :: MD2)
   describe "cryptohash's MD4"        $ testHash (undefined :: MD4)
@@ -79,6 +84,13 @@ main = hspecX $ do
   describe "skein's Skein_512_384"   $ testHash (undefined :: Skein.Skein_512_384)
   describe "skein's Skein_1024_384"  $ testHash (undefined :: Skein.Skein_1024_384)
   describe "skein's Skein_1024_512"  $ testHash (undefined :: Skein.Skein_1024_512)
+  describe "cryptocipher's AES128"   $ testBlockCipher (undefined :: AES128)
+  describe "cryptocipher's AES192"   $ testBlockCipher (undefined :: AES192)
+  describe "cryptocipher's AES256"   $ testBlockCipher (undefined :: AES256)
+
+
+----------------------------------------------------------------------
+
 
 testHash :: C.Hash ctx d => d -> Specs
 testHash d = do
@@ -102,5 +114,65 @@ prop_sinkHmac d mackey input =
     in d1 == d2
 
 
+----------------------------------------------------------------------
+
+
+testBlockCipher :: C.BlockCipher k => k -> Specs
+testBlockCipher undefinedKey = do
+  let Just k =
+          let len = (C.keyLength .::. k) `div` 8
+          in C.buildKey (B.replicate len 0xFF) `asTypeOf` Just undefinedKey
+      blockSize = (C.blockSize .::. k) `div` 8
+
+  prop "works with conduitEncryptEcb" $
+    testBlockCipherConduit blockSize (conduitEncryptEcb k) (C.ecb k)
+  prop "works with conduitDecryptEcb" $
+    testBlockCipherConduit blockSize (conduitDecryptEcb k) (C.unEcb k)
+
+  prop "works with conduitEncryptCbc" $
+    testBlockCipherConduit blockSize (conduitEncryptCbc k C.zeroIV) (fst . C.cbc k C.zeroIV)
+  prop "works with conduitDecryptCbc" $
+    testBlockCipherConduit blockSize (conduitDecryptCbc k C.zeroIV) (fst . C.unCbc k C.zeroIV)
+
+  prop "works with conduitEncryptCfb" $
+    testBlockCipherConduit blockSize (conduitEncryptCfb k C.zeroIV) (fst . C.cfb k C.zeroIV)
+  prop "works with conduitDecryptCfb" $
+    testBlockCipherConduit blockSize (conduitDecryptCfb k C.zeroIV) (fst . C.unCfb k C.zeroIV)
+
+  prop "works with conduitEncryptOfb" $
+    testBlockCipherConduit blockSize (conduitEncryptOfb k C.zeroIV) (fst . C.ofb k C.zeroIV)
+  prop "works with conduitDecryptOfb" $
+    testBlockCipherConduit blockSize (conduitDecryptOfb k C.zeroIV) (fst . C.unOfb k C.zeroIV)
+
+  prop "works with conduitEncryptCtr" $
+    testBlockCipherConduit blockSize (conduitEncryptCtr k C.zeroIV C.incIV) (fst . C.ctr C.incIV k C.zeroIV)
+  prop "works with conduitDecryptCtr" $
+    testBlockCipherConduit blockSize (conduitDecryptCtr k C.zeroIV C.incIV) (fst . C.unCtr C.incIV k C.zeroIV)
+
+
+
+testBlockCipherConduit ::
+       C.ByteLength
+    -> (forall m. Resource m => Conduit B.ByteString m B.ByteString)
+    -> (L.ByteString -> L.ByteString)
+    -> [Word8]
+    -> Bool
+testBlockCipherConduit blockSize conduit lazyfun input =
+    let preinputL  = L.pack input
+        blockSize' = fromIntegral blockSize
+        toFill     = let leftovers = L.length preinputL `mod` blockSize'
+                     in if leftovers == 0 then 0 else blockSize' - leftovers
+        inputL     = L.append preinputL $ L.replicate toFill 0xFF
+        r1 = runPureResource $ sourceList (L.toChunks inputL) $$ conduit =$ consumeAsLazy
+        r2 = lazyfun inputL
+    in r1 == r2
+
+
+----------------------------------------------------------------------
+
+
 runPureResource :: (forall m. Resource m => ResourceT m a) -> a
 runPureResource r = runST (runResourceT r)
+
+consumeAsLazy :: Resource m => Sink B.ByteString m L.ByteString
+consumeAsLazy = L.fromChunks <$> consume
