@@ -7,6 +7,7 @@
 module Crypto.Conduit
     ( -- * Cryptographic hash functions
       sinkHash
+    , hashFile
 
       -- * Hash-based message authentication code (HMAC)
     , sinkHmac
@@ -60,6 +61,10 @@ import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
+import Data.Conduit.Binary (sourceFile)
+
+-- from transformers
+import Control.Monad.IO.Class (MonadIO, liftIO)
 
 
 -- | Helper to get our return type.
@@ -87,6 +92,17 @@ sinkHash = blocked AnyMultiple blockSize =$ sink
           in return (error "sinkHash", Done Nothing ret)
 
       blockSize = (C.blockLength .::. getType sink) `div` 8
+
+
+-- | Hashes the whole contents of the given file in constant
+-- memory.  This function is just a convenient wrapper around
+-- 'sinkHash' defined as:
+--
+-- @
+-- hashFile fp = 'liftIO' $ 'runResourceT' ('sourceFile' fp '$$' 'sinkHash')
+-- @
+hashFile :: (MonadIO m, C.Hash ctx d) => FilePath -> m d
+hashFile fp = liftIO $ runResourceT (sourceFile fp $$ sinkHash)
 
 
 ----------------------------------------------------------------------
