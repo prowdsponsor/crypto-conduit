@@ -31,7 +31,7 @@ module Crypto.Conduit
       -- ** Cipher-block chaining message authentication code (CBC-MAC)
     , sinkCbcMac
 
-      -- * Helpers
+      -- * Internal helpers
     , blocked
     , BlockMode(..)
     , Block(..)
@@ -307,10 +307,11 @@ sourceCtr k iv = sourceState iv pull
 
 
 -- | A 'Sink' that computes the CBC-MAC of a stream of
--- 'B.ByteString'@s@ and creates a digest @d@.  Expects the input
--- length to be a multiple of the block size of the cipher and
--- fails otherwise.  (Note that CBC-MAC is not secure for
--- variable-length messages.)
+-- 'B.ByteString'@s@ and creates a digest (already encoded in a
+-- 'B.ByteString', since we're using a block cipher).  Expects
+-- the input length to be a multiple of the block size of the
+-- cipher and fails otherwise.  (Note that CBC-MAC is not secure
+-- for variable-length messages.)
 sinkCbcMac :: (Resource m, C.BlockCipher k) =>
               k -- ^ Cipher key.
            -> Sink B.ByteString m B.ByteString
