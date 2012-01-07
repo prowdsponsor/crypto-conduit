@@ -374,10 +374,12 @@ blocked mode blockSize = conduitState B.empty push close
 -- | How 'Block's should be returned, either with strictly the
 -- block size or with a multiple of at least 1x the block size.
 data BlockMode = StrictBlockSize | AnyMultiple
+                 deriving (Eq, Ord, Show, Enum)
 
 
 -- | A block returned by 'blocked'.
 data Block = Full B.ByteString | LastOne B.ByteString
+             deriving (Eq, Ord, Show)
 
 
 -- | Constructs a 'Conduit' for a 'BlockCipher'.
