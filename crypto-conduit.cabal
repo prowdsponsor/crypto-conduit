@@ -1,13 +1,13 @@
 Cabal-version:       >= 1.8
 Name:                crypto-conduit
-Version:             0.1.1
+Version:             0.1.1.1
 Synopsis:            Conduit interface for cryptographic operations (from crypto-api).
 Homepage:            https://github.com/meteficha/crypto-conduit
 License:             BSD3
 License-file:        LICENSE
 Author:              Felipe Lessa <felipe.lessa@gmail.com>
 Maintainer:          Felipe Lessa <felipe.lessa@gmail.com>
-Category:            Cryptography
+Category:            Cryptography, Conduit
 Build-type:          Simple
 
 Description:
