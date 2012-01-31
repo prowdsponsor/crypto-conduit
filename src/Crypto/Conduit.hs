@@ -86,10 +86,10 @@ sinkHash = blocked AnyMultiple blockSize =$ sink
 
       push ctx (Full bs) =
           let !ctx' = C.updateCtx ctx bs
-          in return (ctx', Processing)
+          in return (StateProcessing ctx')
       push ctx (LastOne bs) =
           let !ret = C.finalize ctx bs
-          in return (error "sinkHash", Done Nothing ret)
+          in return (StateDone Nothing ret)
 
       blockSize = (C.blockLength .::. getType sink) `div` 8
 
@@ -131,11 +131,11 @@ sinkHmac (C.MacKey key) = blocked AnyMultiple blockSize =$ sink
 
       push ctx (Full bs) =
           let !ctx' = C.updateCtx ctx bs
-          in return (ctx', Processing)
+          in return (StateProcessing ctx')
       push ctx (LastOne bs) =
           let !inner = C.finalize ctx bs `asTypeOf` d
               !outer = C.hash $ L.fromChunks [ko, S.encode inner]
-          in return (error "sinkHmac", Done Nothing outer)
+          in return (StateDone Nothing outer)
 
       d = getType sink
       blockSize  = (C.blockLength  .::. d) `div` 8
@@ -316,7 +316,7 @@ sourceCtr k iv = sourceState iv pull
       pull iv' =
           let !iv'' = C.incIV iv'
               block = C.encryptBlock k $ S.encode iv'
-          in return (iv'', Open block)
+          in return (StateOpen iv'' block)
 
 
 ----------------------------------------------------------------------
@@ -337,9 +337,9 @@ sinkCbcMac k = blocked StrictBlockSize blockSize =$ sink
 
       push iv (Full input) =
           let !iv' = C.encryptBlock k (iv `zwp` input)
-          in return (iv', Processing)
+          in return (StateProcessing iv')
       push iv (LastOne input)
-          | B.null input = return (error "sinkCbcMac", Done Nothing iv)
+          | B.null input = return (StateDone Nothing iv)
           | otherwise    = fail "sinkCbcMac: input has an incomplete final block."
 
       close _ = fail "sinkCbcMac"
@@ -383,7 +383,7 @@ blocked mode blockSize = conduitState B.empty push close
 
       push acc = return . mk . block . append acc
           where
-            mk (blks, rest) = (rest, Producing blks)
+            mk (blks, rest) = (StateProducing rest blks)
 
       close = return . (:[]) . LastOne
 
@@ -415,11 +415,11 @@ blockCipherConduit key mode initialState apply final = blocked mode blockSize =$
 
       push state (Full input) =
           let (!state', !output) = apply state input
-          in return (state', Producing [output])
+          in return (StateProducing state' [output])
       push _ (LastOne input) | B.null input =
-          return (error "blockCipherConduit", Finished Nothing [])
+          return (StateFinished Nothing [])
       push state (LastOne input) = mk <$> final state input
-          where mk output = (error "blockCipherConduit", Finished Nothing [output])
+          where mk output = StateFinished Nothing [output]
 
       close _ = fail "blockCipherConduit"
 
