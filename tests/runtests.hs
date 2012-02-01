@@ -103,7 +103,7 @@ prop_sinkHash d input =
     in d1 == d2
 
 
-prop_sinkHmac :: C.Hash ctx d => d -> C.MacKey -> L.ByteString -> Bool
+prop_sinkHmac :: C.Hash ctx d => d -> C.MacKey ctx d -> L.ByteString -> Bool
 prop_sinkHmac d mackey input =
     let d1 = runPureResource $ sourceList (L.toChunks input) $$ sinkHmac mackey
         d2 = C.hmac mackey input `asTypeOf` d

@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, CPP #-}
 -- | This module contains wrappers for cryptographic functions
 -- using the @conduit@ package.  Currently there is support for
 -- hashes, HMACs and many modes of block ciphers (but not
@@ -110,7 +110,13 @@ hashFile fp = liftIO $ runResourceT (sourceFile fp $$ sinkHash)
 
 -- | A 'Sink' that computes the HMAC of a stream of
 -- 'B.ByteString'@s@ and creates a digest @d@.
-sinkHmac :: (Resource m, C.Hash ctx d) => C.MacKey -> Sink B.ByteString m d
+sinkHmac :: (Resource m, C.Hash ctx d) =>
+#if OLD_CRYPTO_API
+            C.MacKey
+#else
+            C.MacKey ctx d
+#endif
+         -> Sink B.ByteString m d
 sinkHmac (C.MacKey key) = blocked AnyMultiple blockSize =$ sink
     where
       --------- Taken and modified from Crypto.HMAC:
