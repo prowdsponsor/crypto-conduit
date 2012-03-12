@@ -39,7 +39,7 @@ module Crypto.Conduit
     ) where
 
 -- from base
-import Control.Applicative ((<$>))
+import Control.Monad (liftM)
 import Control.Arrow (first)
 import Data.Bits (xor)
 
@@ -77,7 +77,7 @@ getType = undefined
 
 -- | A 'Sink' that hashes a stream of 'B.ByteString'@s@ and
 -- creates a digest @d@.
-sinkHash :: (Resource m, C.Hash ctx d) => Sink B.ByteString m d
+sinkHash :: (Monad m, C.Hash ctx d) => Sink B.ByteString m d
 sinkHash = blocked AnyMultiple blockSize =$ sink
     where
       sink = sinkState C.initialCtx
@@ -110,7 +110,7 @@ hashFile fp = liftIO $ runResourceT (sourceFile fp $$ sinkHash)
 
 -- | A 'Sink' that computes the HMAC of a stream of
 -- 'B.ByteString'@s@ and creates a digest @d@.
-sinkHmac :: (Resource m, C.Hash ctx d) =>
+sinkHmac :: (Monad m, C.Hash ctx d) =>
 #if OLD_CRYPTO_API
             C.MacKey
 #else
@@ -156,7 +156,7 @@ sinkHmac (C.MacKey key) = blocked AnyMultiple blockSize =$ sink
 -- the block size of the cipher and fails otherwise.  (Note that
 -- ECB has many undesirable cryptographic properties, please
 -- avoid it if you don't know what you're doing.)
-conduitEncryptEcb :: (Resource m, C.BlockCipher k) =>
+conduitEncryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
                   -> Conduit B.ByteString m B.ByteString
 conduitEncryptEcb k =
@@ -170,7 +170,7 @@ conduitEncryptEcb k =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using ECB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptEcb :: (Resource m, C.BlockCipher k) =>
+conduitDecryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
                   -> Conduit B.ByteString m B.ByteString
 conduitDecryptEcb k =
@@ -187,7 +187,7 @@ conduitDecryptEcb k =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using CBC mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptCbc :: (Resource m, C.BlockCipher k) =>
+conduitEncryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -203,7 +203,7 @@ conduitEncryptCbc k iv =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using CBC mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptCbc :: (Resource m, C.BlockCipher k) =>
+conduitDecryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -222,7 +222,7 @@ conduitDecryptCbc k iv =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using CFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptCfb :: (Resource m, C.BlockCipher k) =>
+conduitEncryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -238,7 +238,7 @@ conduitEncryptCfb k iv =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using CFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptCfb :: (Resource m, C.BlockCipher k) =>
+conduitDecryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -257,7 +257,7 @@ conduitDecryptCfb k iv =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using OFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptOfb :: (Resource m, C.BlockCipher k) =>
+conduitEncryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -272,7 +272,7 @@ conduitEncryptOfb k iv =
 
 -- | Synonym for 'conduitEncryptOfb', since for OFB mode both
 -- encryption and decryption are the same.
-conduitDecryptOfb :: (Resource m, C.BlockCipher k) =>
+conduitDecryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> Conduit B.ByteString m B.ByteString
@@ -285,7 +285,7 @@ conduitDecryptOfb = conduitEncryptOfb
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using CTR mode.  The input may have any length, even
 -- non-multiples of the block size.
-conduitEncryptCtr :: (Resource m, C.BlockCipher k) =>
+conduitEncryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
@@ -303,7 +303,7 @@ conduitEncryptCtr k iv incIV =
 
 -- | Synonym for 'conduitEncryptCtr', since for CTR mode both
 -- encryption and decryption are the same.
-conduitDecryptCtr :: (Resource m, C.BlockCipher k) =>
+conduitDecryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
@@ -313,7 +313,7 @@ conduitDecryptCtr = conduitEncryptCtr
 
 -- | An infinite stream of bytes generated by a block cipher on
 -- CTR mode.
-sourceCtr :: (Resource m, C.BlockCipher k) =>
+sourceCtr :: (Monad m, C.BlockCipher k) =>
              k      -- ^ Cipher key.
           -> C.IV k -- ^ Initialization vector.
           -> Source m B.ByteString
@@ -334,7 +334,7 @@ sourceCtr k iv = sourceState iv pull
 -- the input length to be a multiple of the block size of the
 -- cipher and fails otherwise.  (Note that CBC-MAC is not secure
 -- for variable-length messages.)
-sinkCbcMac :: (Resource m, C.BlockCipher k) =>
+sinkCbcMac :: (Monad m, C.BlockCipher k) =>
               k -- ^ Cipher key.
            -> Sink B.ByteString m B.ByteString
 sinkCbcMac k = blocked StrictBlockSize blockSize =$ sink
@@ -363,7 +363,7 @@ sinkCbcMac k = blocked StrictBlockSize blockSize =$ sink
 -- the 'BlockMode').  All 'Block'@s@ beside the last one will be
 -- 'Full'.  The last block will always be 'LastOne' with less
 -- bytes than the block size, possibly zero.
-blocked :: Resource m =>
+blocked :: Monad m =>
            BlockMode
         -> C.ByteLength -- ^ Block size
         -> Conduit B.ByteString m Block
@@ -406,12 +406,12 @@ data Block = Full B.ByteString | LastOne B.ByteString
 
 
 -- | Constructs a 'Conduit' for a 'BlockCipher'.
-blockCipherConduit :: (Resource m, C.BlockCipher k) =>
+blockCipherConduit :: (Monad m, C.BlockCipher k) =>
                       k -- ^ Cipher key (not used, just for getting block size).
                    -> BlockMode
                    -> s -- ^ Initial state.
                    -> (s -> B.ByteString -> (s, B.ByteString))        -- ^ Encrypt block.
-                   -> (s -> B.ByteString -> ResourceT m B.ByteString) -- ^ Final encryption.
+                   -> (s -> B.ByteString -> m B.ByteString) -- ^ Final encryption.
                    -> Conduit B.ByteString m B.ByteString
 blockCipherConduit key mode initialState apply final = blocked mode blockSize =$= conduit
     where
@@ -424,7 +424,7 @@ blockCipherConduit key mode initialState apply final = blocked mode blockSize =$
           in return (StateProducing state' [output])
       push _ (LastOne input) | B.null input =
           return (StateFinished Nothing [])
-      push state (LastOne input) = mk <$> final state input
+      push state (LastOne input) = mk `liftM` final state input
           where mk output = StateFinished Nothing [output]
 
       close _ = fail "blockCipherConduit"
