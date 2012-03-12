@@ -1,5 +1,4 @@
 language: haskell
 install:
   - cabal update
-  - cabal install
-  - cabal install --enable-tests
+  - cabal install bytestring cereal conduit transformers crypto-api cryptocipher cryptohash skein hspec
