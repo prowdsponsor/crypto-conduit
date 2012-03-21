@@ -191,7 +191,7 @@ testBlockCipher undefinedKey = do
 
 testBlockCipherConduit ::
        Maybe C.ByteLength -- ^ Fix input length to be a multiple of the block size?
-    -> (forall m. Resource m => Conduit B.ByteString m B.ByteString)
+    -> (forall m. Monad m => Conduit B.ByteString m B.ByteString)
     -> (L.ByteString -> L.ByteString)
     -> [Word8]
     -> Bool
@@ -205,10 +205,10 @@ testBlockCipherConduit mblockSize conduit lazyfun input =
 ----------------------------------------------------------------------
 
 
-runPureResource :: (forall m. Resource m => ResourceT m a) -> a
-runPureResource r = runST (runResourceT r)
+runPureResource :: (forall m. Monad m => m a) -> a
+runPureResource r = runST r
 
-consumeAsLazy :: Resource m => Sink B.ByteString m L.ByteString
+consumeAsLazy :: Monad m => Sink B.ByteString m L.ByteString
 consumeAsLazy = L.fromChunks <$> consume
 
 fixBlockedSize :: C.ByteLength -> L.ByteString -> L.ByteString
