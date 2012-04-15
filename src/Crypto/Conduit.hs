@@ -65,6 +65,7 @@ import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Class (lift)
 
 
 -- | Helper to get our return type.
@@ -359,18 +360,18 @@ sourceCtr k iv = sourceState iv pull
 sinkCbcMac :: (Monad m, C.BlockCipher k) =>
               k -- ^ Cipher key.
            -> Sink B.ByteString m B.ByteString
-sinkCbcMac k = blocked StrictBlockSize blockSize =$ sink
+sinkCbcMac k =
+      go $ B.replicate blockSize 0
     where
-      sink = sinkState (B.replicate blockSize 0) push close
-
-      push iv (Full input) =
-          let !iv' = C.encryptBlock k (iv `zwp` input)
-          in return (StateProcessing iv')
-      push iv (LastOne input)
-          | B.null input = return (StateDone Nothing iv)
-          | otherwise    = fail "sinkCbcMac: input has an incomplete final block."
-
-      close _ = fail "sinkCbcMac"
+      go iv = do
+          x <- getBlock StrictBlockSize blockSize
+          case x of
+              Full input ->
+                  let !iv' = C.encryptBlock k (iv `zwp` input)
+                   in go iv'
+              LastOne input
+                  | B.null input -> return iv
+                  | otherwise -> lift $ fail "sinkCbcMac: input has an incomplete final block."
 
       blockSize = (C.blockSize .::. k) `div` 8
 
