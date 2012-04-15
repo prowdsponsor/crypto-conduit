@@ -78,21 +78,41 @@ getType = undefined
 -- | A 'Sink' that hashes a stream of 'B.ByteString'@s@ and
 -- creates a digest @d@.
 sinkHash :: (Monad m, C.Hash ctx d) => Sink B.ByteString m d
-sinkHash = blocked AnyMultiple blockSize =$ sink
-    where
-      sink = sinkState C.initialCtx
-                       push
-                       (const $ fail "sinkHash")
+sinkHash =
+    self
+  where
+    self = sink C.initialCtx
+    sink ctx = do
+        x <- getBlock AnyMultiple blockSize
+        case x of
+            Full bs ->
+                let !ctx' = C.updateCtx ctx bs
+                 in sink ctx'
+            LastOne bs -> return $! C.finalize ctx bs
 
-      push ctx (Full bs) =
-          let !ctx' = C.updateCtx ctx bs
-          in return (StateProcessing ctx')
-      push ctx (LastOne bs) =
-          let !ret = C.finalize ctx bs
-          in return (StateDone Nothing ret)
+    blockSize = (C.blockLength .::. getType self) `div` 8
 
-      blockSize = (C.blockLength .::. getType sink) `div` 8
+getBlock :: Monad m => BlockMode -> C.ByteLength -> Sink B.ByteString m Block
+getBlock blockMode blockSize =
+    go id
+  where
+    go front = NeedInput (push front) (close front)
 
+    push front bs' =
+        case compare (B.length bs) blockSize of
+            LT -> go $ B.append bs
+            EQ -> Done Nothing $ Full bs
+            GT -> Done (Just y) $ Full x
+      where
+        bs = front bs'
+        (x, y) = B.splitAt splitter bs
+
+        splitter =
+            case blockMode of
+                StrictBlockSize -> blockSize
+                AnyMultiple -> blockSize - (B.length bs `mod` blockSize)
+
+    close front = Done Nothing (LastOne $ front B.empty)
 
 -- | Hashes the whole contents of the given file in constant
 -- memory.  This function is just a convenient wrapper around
@@ -117,8 +137,9 @@ sinkHmac :: (Monad m, C.Hash ctx d) =>
             C.MacKey ctx d
 #endif
          -> Sink B.ByteString m d
-sinkHmac (C.MacKey key) = blocked AnyMultiple blockSize =$ sink
-    where
+sinkHmac (C.MacKey key) =
+      sink
+  where
       --------- Taken and modified from Crypto.HMAC:
       key' =
           case B.length key `compare` blockSize of
@@ -131,17 +152,18 @@ sinkHmac (C.MacKey key) = blocked AnyMultiple blockSize =$ sink
       ki = B.map (`xor` 0x36) key'
       ---------
 
-      sink = sinkState (C.updateCtx C.initialCtx ki)
-                       push
-                       (const $ fail "sinkHmac")
+      sink = go $ C.updateCtx C.initialCtx ki
 
-      push ctx (Full bs) =
-          let !ctx' = C.updateCtx ctx bs
-          in return (StateProcessing ctx')
-      push ctx (LastOne bs) =
-          let !inner = C.finalize ctx bs `asTypeOf` d
-              !outer = C.hash $ L.fromChunks [ko, S.encode inner]
-          in return (StateDone Nothing outer)
+      go ctx = do
+        x <- getBlock AnyMultiple blockSize
+        case x of
+            Full bs ->
+                let !ctx' = C.updateCtx ctx bs
+                 in go ctx'
+            LastOne bs ->
+              let !inner = C.finalize ctx bs `asTypeOf` d
+                  !outer = C.hash $ L.fromChunks [ko, S.encode inner]
+              in return outer
 
       d = getType sink
       blockSize  = (C.blockLength  .::. d) `div` 8
