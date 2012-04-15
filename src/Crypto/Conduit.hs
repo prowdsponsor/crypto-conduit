@@ -39,7 +39,6 @@ module Crypto.Conduit
     ) where
 
 -- from base
-import Control.Monad (liftM)
 import Control.Arrow (first)
 import Data.Bits (xor)
 
@@ -61,6 +60,7 @@ import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
+import qualified Data.Conduit.Internal as CI
 import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
@@ -111,7 +111,7 @@ getBlock blockMode blockSize =
         splitter =
             case blockMode of
                 StrictBlockSize -> blockSize
-                AnyMultiple -> blockSize - (B.length bs `mod` blockSize)
+                AnyMultiple -> B.length bs - (B.length bs `mod` blockSize)
 
     close front = Done Nothing (LastOne $ front B.empty)
 
@@ -436,22 +436,21 @@ blockCipherConduit :: (Monad m, C.BlockCipher k) =>
                    -> (s -> B.ByteString -> (s, B.ByteString))        -- ^ Encrypt block.
                    -> (s -> B.ByteString -> m B.ByteString) -- ^ Final encryption.
                    -> Conduit B.ByteString m B.ByteString
-blockCipherConduit key mode initialState apply final = blocked mode blockSize =$= conduit
+blockCipherConduit key mode initialState apply final =
+      go initialState
     where
       blockSize = (C.blockSize .::. key) `div` 8
 
-      conduit = conduitState initialState push close
-
-      push state (Full input) =
-          let (!state', !output) = apply state input
-          in return (StateProducing state' [output])
-      push _ (LastOne input) | B.null input =
-          return (StateFinished Nothing [])
-      push state (LastOne input) = mk `liftM` final state input
-          where mk output = StateFinished Nothing [output]
-
-      close _ = fail "blockCipherConduit"
-
+      go state = do
+          x <- CI.sinkToPipe $ getBlock mode blockSize
+          case x of
+              Full input -> do
+                  let (!state', !output) = apply state input
+                  yield output
+                  go state'
+              LastOne input
+                  | B.null input -> return ()
+                  | otherwise -> lift (final state input) >>= yield
 
 -- | zipWith xor + pack
 --
