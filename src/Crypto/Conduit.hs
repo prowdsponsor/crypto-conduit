@@ -60,7 +60,6 @@ import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
-import qualified Data.Conduit.Internal as CI
 import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
@@ -93,17 +92,17 @@ sinkHash =
 
     blockSize = (C.blockLength .::. getType self) `div` 8
 
-getBlock :: Monad m => BlockMode -> C.ByteLength -> Sink B.ByteString m Block
+getBlock :: Monad m => BlockMode -> C.ByteLength -> Pipe B.ByteString B.ByteString o u m Block
 getBlock blockMode blockSize =
     go id
   where
-    go front = NeedInput (push front) (close front)
+    go front = await >>= maybe (close front) (push front)
 
     push front bs' =
         case compare (B.length bs) blockSize of
             LT -> go $ B.append bs
-            EQ -> Done Nothing $ Full bs
-            GT -> Done (Just y) $ Full x
+            EQ -> return $ Full bs
+            GT -> leftover y >> return (Full x)
       where
         bs = front bs'
         (x, y) = B.splitAt splitter bs
@@ -113,7 +112,7 @@ getBlock blockMode blockSize =
                 StrictBlockSize -> blockSize
                 AnyMultiple -> B.length bs - (B.length bs `mod` blockSize)
 
-    close front = Done Nothing (LastOne $ front B.empty)
+    close front = return $ LastOne $ front B.empty
 
 -- | Hashes the whole contents of the given file in constant
 -- memory.  This function is just a convenient wrapper around
@@ -340,12 +339,14 @@ sourceCtr :: (Monad m, C.BlockCipher k) =>
              k      -- ^ Cipher key.
           -> C.IV k -- ^ Initialization vector.
           -> Source m B.ByteString
-sourceCtr k iv = sourceState iv pull
-    where
-      pull iv' =
-          let !iv'' = C.incIV iv'
-              block = C.encryptBlock k $ S.encode iv'
-          in return (StateOpen iv'' block)
+sourceCtr k =
+    loop
+  where
+    loop iv =
+        yield block >> loop iv'
+      where
+        !iv' = C.incIV iv
+        block = C.encryptBlock k $ S.encode iv
 
 
 ----------------------------------------------------------------------
@@ -390,15 +391,17 @@ blocked :: Monad m =>
            BlockMode
         -> C.ByteLength -- ^ Block size
         -> Conduit B.ByteString m Block
-blocked mode blockSize = conduitState B.empty push close
+blocked mode blockSize = go B.empty
     where
+      go x = awaitE >>= either (close x) (push x)
+
       block = case mode of
-                StrictBlockSize -> blockStrict []
+                StrictBlockSize -> blockStrict id
                 AnyMultiple     -> blockAny
         where
-          blockStrict acc bs
-              | B.length bs < blockSize = (reverse acc, bs)
-              | otherwise               = blockStrict (Full this : acc) rest
+          blockStrict front bs
+              | B.length bs < blockSize = (front [], bs)
+              | otherwise               = blockStrict (front . (Full this :)) rest
               where (this, rest) = B.splitAt blockSize bs
 
           blockAny bs
@@ -410,11 +413,12 @@ blocked mode blockSize = conduitState B.empty push close
           | B.null bs1 = bs2
           | otherwise  = B.append bs1 bs2
 
-      push acc = return . mk . block . append acc
+      push acc x = mapM_ yield blks >> go rest
           where
-            mk (blks, rest) = (StateProducing rest blks)
+            (blks, rest) = block bs
+            bs = append acc x
 
-      close = return . (:[]) . LastOne
+      close acc r = yield (LastOne acc) >> return r
 
 
 -- | How 'Block's should be returned, either with strictly the
@@ -442,7 +446,7 @@ blockCipherConduit key mode initialState apply final =
       blockSize = (C.blockSize .::. key) `div` 8
 
       go state = do
-          x <- CI.sinkToPipe $ getBlock mode blockSize
+          x <- getBlock mode blockSize
           case x of
               Full input -> do
                   let (!state', !output) = apply state input
