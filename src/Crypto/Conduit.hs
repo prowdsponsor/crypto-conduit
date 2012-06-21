@@ -59,7 +59,7 @@ import qualified Crypto.Modes as C
 import qualified Crypto.Types as C
 
 -- from conduit
-import Data.Conduit hiding (Source, Sink, Conduit)
+import Data.Conduit hiding (Source, Sink, Conduit, Pipe)
 import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
@@ -77,7 +77,7 @@ getType = undefined
 
 -- | A 'Sink' that hashes a stream of 'B.ByteString'@s@ and
 -- creates a digest @d@.
-sinkHash :: (Monad m, C.Hash ctx d) => Pipe B.ByteString B.ByteString o u m d
+sinkHash :: (Monad m, C.Hash ctx d) => GLSink B.ByteString m d
 sinkHash =
     self
   where
@@ -92,7 +92,7 @@ sinkHash =
 
     blockSize = (C.blockLength .::. getType self) `div` 8
 
-getBlock :: Monad m => BlockMode -> C.ByteLength -> Pipe B.ByteString B.ByteString o u m Block
+getBlock :: Monad m => BlockMode -> C.ByteLength -> GLSink B.ByteString m Block
 getBlock blockMode blockSize =
     go id
   where
@@ -136,7 +136,7 @@ sinkHmac :: (Monad m, C.Hash ctx d) =>
 #else
             C.MacKey ctx d
 #endif
-         -> Pipe B.ByteString B.ByteString o u m d
+         -> GLSink B.ByteString m d
 sinkHmac (C.MacKey key) =
       sink
   where
@@ -180,7 +180,7 @@ sinkHmac (C.MacKey key) =
 -- avoid it if you don't know what you're doing.)
 conduitEncryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -194,7 +194,7 @@ conduitEncryptEcb k =
 -- the block size of the cipher and fails otherwise.
 conduitDecryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -212,7 +212,7 @@ conduitDecryptEcb k =
 conduitEncryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -228,7 +228,7 @@ conduitEncryptCbc k iv =
 conduitDecryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -247,7 +247,7 @@ conduitDecryptCbc k iv =
 conduitEncryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -263,7 +263,7 @@ conduitEncryptCfb k iv =
 conduitDecryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -282,7 +282,7 @@ conduitDecryptCfb k iv =
 conduitEncryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptOfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -297,7 +297,7 @@ conduitEncryptOfb k iv =
 conduitDecryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptOfb = conduitEncryptOfb
 
 
@@ -311,7 +311,7 @@ conduitEncryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCtr k iv incIV =
     blockCipherConduit k
       StrictBlockSize
@@ -329,7 +329,7 @@ conduitDecryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCtr = conduitEncryptCtr
 
 
@@ -338,7 +338,7 @@ conduitDecryptCtr = conduitEncryptCtr
 sourceCtr :: (Monad m, C.BlockCipher k) =>
              k      -- ^ Cipher key.
           -> C.IV k -- ^ Initialization vector.
-          -> Pipe l i B.ByteString u m r
+          -> GSource m B.ByteString
 sourceCtr k =
     loop
   where
@@ -360,7 +360,7 @@ sourceCtr k =
 -- for variable-length messages.)
 sinkCbcMac :: (Monad m, C.BlockCipher k) =>
               k -- ^ Cipher key.
-           -> Pipe B.ByteString B.ByteString o u m B.ByteString
+           -> GLSink B.ByteString m B.ByteString
 sinkCbcMac k =
       go $ B.replicate blockSize 0
     where
@@ -390,7 +390,7 @@ sinkCbcMac k =
 blocked :: Monad m =>
            BlockMode
         -> C.ByteLength -- ^ Block size
-        -> Pipe l B.ByteString Block r m r
+        -> GInfConduit B.ByteString m Block
 blocked mode blockSize = go B.empty
     where
       go x = awaitE >>= either (close x) (push x)
@@ -439,7 +439,7 @@ blockCipherConduit :: (Monad m, C.BlockCipher k) =>
                    -> s -- ^ Initial state.
                    -> (s -> B.ByteString -> (s, B.ByteString))        -- ^ Encrypt block.
                    -> (s -> B.ByteString -> m B.ByteString) -- ^ Final encryption.
-                   -> Pipe B.ByteString B.ByteString B.ByteString r m r
+                   -> GLInfConduit B.ByteString m B.ByteString
 blockCipherConduit key mode initialState apply final =
       go initialState
     where
