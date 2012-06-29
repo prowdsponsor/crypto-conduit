@@ -59,8 +59,7 @@ import qualified Crypto.Modes as C
 import qualified Crypto.Types as C
 
 -- from conduit
-import Data.Conduit
-import qualified Data.Conduit.Internal as CI
+import Data.Conduit hiding (Source, Sink, Conduit, Pipe)
 import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
@@ -78,7 +77,7 @@ getType = undefined
 
 -- | A 'Sink' that hashes a stream of 'B.ByteString'@s@ and
 -- creates a digest @d@.
-sinkHash :: (Monad m, C.Hash ctx d) => Sink B.ByteString m d
+sinkHash :: (Monad m, C.Hash ctx d) => GLSink B.ByteString m d
 sinkHash =
     self
   where
@@ -93,17 +92,17 @@ sinkHash =
 
     blockSize = (C.blockLength .::. getType self) `div` 8
 
-getBlock :: Monad m => BlockMode -> C.ByteLength -> Sink B.ByteString m Block
+getBlock :: Monad m => BlockMode -> C.ByteLength -> GLSink B.ByteString m Block
 getBlock blockMode blockSize =
     go id
   where
-    go front = NeedInput (push front) (close front)
+    go front = await >>= maybe (close front) (push front)
 
     push front bs' =
         case compare (B.length bs) blockSize of
             LT -> go $ B.append bs
-            EQ -> Done Nothing $ Full bs
-            GT -> Done (Just y) $ Full x
+            EQ -> return $ Full bs
+            GT -> leftover y >> return (Full x)
       where
         bs = front bs'
         (x, y) = B.splitAt splitter bs
@@ -113,7 +112,7 @@ getBlock blockMode blockSize =
                 StrictBlockSize -> blockSize
                 AnyMultiple -> B.length bs - (B.length bs `mod` blockSize)
 
-    close front = Done Nothing (LastOne $ front B.empty)
+    close front = return $ LastOne $ front B.empty
 
 -- | Hashes the whole contents of the given file in constant
 -- memory.  This function is just a convenient wrapper around
@@ -137,7 +136,7 @@ sinkHmac :: (Monad m, C.Hash ctx d) =>
 #else
             C.MacKey ctx d
 #endif
-         -> Sink B.ByteString m d
+         -> GLSink B.ByteString m d
 sinkHmac (C.MacKey key) =
       sink
   where
@@ -181,7 +180,7 @@ sinkHmac (C.MacKey key) =
 -- avoid it if you don't know what you're doing.)
 conduitEncryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -195,7 +194,7 @@ conduitEncryptEcb k =
 -- the block size of the cipher and fails otherwise.
 conduitDecryptEcb :: (Monad m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -213,7 +212,7 @@ conduitDecryptEcb k =
 conduitEncryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -229,7 +228,7 @@ conduitEncryptCbc k iv =
 conduitDecryptCbc :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -248,7 +247,7 @@ conduitDecryptCbc k iv =
 conduitEncryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -264,7 +263,7 @@ conduitEncryptCfb k iv =
 conduitDecryptCfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -283,7 +282,7 @@ conduitDecryptCfb k iv =
 conduitEncryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptOfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -298,7 +297,7 @@ conduitEncryptOfb k iv =
 conduitDecryptOfb :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptOfb = conduitEncryptOfb
 
 
@@ -312,7 +311,7 @@ conduitEncryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitEncryptCtr k iv incIV =
     blockCipherConduit k
       StrictBlockSize
@@ -330,7 +329,7 @@ conduitDecryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Conduit B.ByteString m B.ByteString
+                  -> GLInfConduit B.ByteString m B.ByteString
 conduitDecryptCtr = conduitEncryptCtr
 
 
@@ -339,13 +338,15 @@ conduitDecryptCtr = conduitEncryptCtr
 sourceCtr :: (Monad m, C.BlockCipher k) =>
              k      -- ^ Cipher key.
           -> C.IV k -- ^ Initialization vector.
-          -> Source m B.ByteString
-sourceCtr k iv = sourceState iv pull
-    where
-      pull iv' =
-          let !iv'' = C.incIV iv'
-              block = C.encryptBlock k $ S.encode iv'
-          in return (StateOpen iv'' block)
+          -> GSource m B.ByteString
+sourceCtr k =
+    loop
+  where
+    loop iv =
+        yield block >> loop iv'
+      where
+        !iv' = C.incIV iv
+        block = C.encryptBlock k $ S.encode iv
 
 
 ----------------------------------------------------------------------
@@ -359,7 +360,7 @@ sourceCtr k iv = sourceState iv pull
 -- for variable-length messages.)
 sinkCbcMac :: (Monad m, C.BlockCipher k) =>
               k -- ^ Cipher key.
-           -> Sink B.ByteString m B.ByteString
+           -> GLSink B.ByteString m B.ByteString
 sinkCbcMac k =
       go $ B.replicate blockSize 0
     where
@@ -389,16 +390,18 @@ sinkCbcMac k =
 blocked :: Monad m =>
            BlockMode
         -> C.ByteLength -- ^ Block size
-        -> Conduit B.ByteString m Block
-blocked mode blockSize = conduitState B.empty push close
+        -> GInfConduit B.ByteString m Block
+blocked mode blockSize = go B.empty
     where
+      go x = awaitE >>= either (close x) (push x)
+
       block = case mode of
-                StrictBlockSize -> blockStrict []
+                StrictBlockSize -> blockStrict id
                 AnyMultiple     -> blockAny
         where
-          blockStrict acc bs
-              | B.length bs < blockSize = (reverse acc, bs)
-              | otherwise               = blockStrict (Full this : acc) rest
+          blockStrict front bs
+              | B.length bs < blockSize = (front [], bs)
+              | otherwise               = blockStrict (front . (Full this :)) rest
               where (this, rest) = B.splitAt blockSize bs
 
           blockAny bs
@@ -410,11 +413,12 @@ blocked mode blockSize = conduitState B.empty push close
           | B.null bs1 = bs2
           | otherwise  = B.append bs1 bs2
 
-      push acc = return . mk . block . append acc
+      push acc x = mapM_ yield blks >> go rest
           where
-            mk (blks, rest) = (StateProducing rest blks)
+            (blks, rest) = block bs
+            bs = append acc x
 
-      close = return . (:[]) . LastOne
+      close acc r = yield (LastOne acc) >> return r
 
 
 -- | How 'Block's should be returned, either with strictly the
@@ -435,22 +439,24 @@ blockCipherConduit :: (Monad m, C.BlockCipher k) =>
                    -> s -- ^ Initial state.
                    -> (s -> B.ByteString -> (s, B.ByteString))        -- ^ Encrypt block.
                    -> (s -> B.ByteString -> m B.ByteString) -- ^ Final encryption.
-                   -> Conduit B.ByteString m B.ByteString
+                   -> GLInfConduit B.ByteString m B.ByteString
 blockCipherConduit key mode initialState apply final =
       go initialState
     where
       blockSize = (C.blockSize .::. key) `div` 8
 
       go state = do
-          x <- CI.sinkToPipe $ getBlock mode blockSize
+          x <- getBlock mode blockSize
           case x of
               Full input -> do
                   let (!state', !output) = apply state input
                   yield output
                   go state'
               LastOne input
-                  | B.null input -> return ()
-                  | otherwise -> lift (final state input) >>= yield
+                  | B.null input -> return () >> finish
+                  | otherwise -> lift (final state input) >>= yield >> finish
+
+      finish = awaitE >>= either return (const finish)
 
 -- | zipWith xor + pack
 --
