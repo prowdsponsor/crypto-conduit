@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP #-}
+{-# LANGUAGE BangPatterns, CPP, RankNTypes #-}
 -- | This module contains wrappers for cryptographic functions
 -- using the @conduit@ package.  Currently there is support for
 -- hashes, HMACs and many modes of block ciphers (but not
