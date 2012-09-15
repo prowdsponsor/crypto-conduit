@@ -44,9 +44,8 @@ import Crypto.Hash.Tiger (Tiger)
 import qualified Crypto.Skein as Skein
 
 -- from hspec
-import Test.Hspec.Monadic
+import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.Hspec.HUnit ()
 
 -- from this package
 import Crypto.Conduit
