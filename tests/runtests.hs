@@ -44,9 +44,8 @@ import Crypto.Hash.Tiger (Tiger)
 import qualified Crypto.Skein as Skein
 
 -- from hspec
-import Test.Hspec.Monadic
+import Test.Hspec
 import Test.Hspec.QuickCheck
-import Test.Hspec.HUnit ()
 
 -- from this package
 import Crypto.Conduit
@@ -54,7 +53,7 @@ import Crypto.Conduit
 
 
 main :: IO ()
-main = hspecX $ do
+main = hspec $ do
   describe "cryptohash's MD2"        $ testHash (undefined :: MD2)
   describe "cryptohash's MD4"        $ testHash (undefined :: MD4)
   describe "cryptohash's MD5"        $ testHash (undefined :: MD5)
@@ -88,7 +87,7 @@ main = hspecX $ do
 ----------------------------------------------------------------------
 
 
-testHash :: C.Hash ctx d => d -> Specs
+testHash :: C.Hash ctx d => d -> Spec
 testHash d = do
   prop "works with sinkHash" $
     \str -> prop_sinkHash d (L.pack str)
@@ -113,7 +112,7 @@ prop_sinkHmac d mackey input =
 ----------------------------------------------------------------------
 
 
-testBlockCipher :: C.BlockCipher k => k -> Specs
+testBlockCipher :: C.BlockCipher k => k -> Spec
 testBlockCipher undefinedKey = do
   let Just k =
           let len = (C.keyLength .::. k) `div` 8
