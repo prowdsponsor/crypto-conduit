@@ -23,9 +23,6 @@ import Data.Conduit
 import Data.Conduit.Binary (isolate)
 import Data.Conduit.List (sourceList, consume)
 
--- from cryptocipher
-import Crypto.Cipher.AES (AES128, AES192, AES256)
-
 -- from cryptohash
 import Crypto.Hash.MD2 (MD2)
 import Crypto.Hash.MD4 (MD4)
@@ -79,9 +76,6 @@ main = hspec $ do
   describe "skein's Skein_512_384"   $ testHash (undefined :: Skein.Skein_512_384)
   describe "skein's Skein_1024_384"  $ testHash (undefined :: Skein.Skein_1024_384)
   describe "skein's Skein_1024_512"  $ testHash (undefined :: Skein.Skein_1024_512)
-  describe "cryptocipher's AES128"   $ testBlockCipher (undefined :: AES128)
-  describe "cryptocipher's AES192"   $ testBlockCipher (undefined :: AES192)
-  describe "cryptocipher's AES256"   $ testBlockCipher (undefined :: AES256)
 
 
 ----------------------------------------------------------------------
