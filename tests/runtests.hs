@@ -13,7 +13,7 @@ import qualified Data.ByteString.Lazy as L
 import Crypto.Classes ((.::.))
 import qualified Crypto.Classes as C
 import qualified Crypto.HMAC as C
-import qualified Crypto.Modes as C
+import qualified Crypto.Modes as CM
 --import qualified Crypto.Padding as C
 --import qualified Crypto.Random as C
 import qualified Crypto.Types as C
@@ -23,19 +23,9 @@ import Data.Conduit
 import Data.Conduit.Binary (isolate)
 import Data.Conduit.List (sourceList, consume)
 
--- from cryptohash
-import Crypto.Hash.MD2 (MD2)
-import Crypto.Hash.MD4 (MD4)
-import Crypto.Hash.MD5 (MD5)
-import Crypto.Hash.RIPEMD160 (RIPEMD160)
-import Crypto.Hash.SHA1 (SHA1)
-import Crypto.Hash.SHA224 (SHA224)
-import Crypto.Hash.SHA256 (SHA256)
-import Crypto.Hash.SHA384 (SHA384)
-import Crypto.Hash.SHA512 (SHA512)
-import Crypto.Hash.Skein256 (Skein256)
-import Crypto.Hash.Skein512 (Skein512)
-import Crypto.Hash.Tiger (Tiger)
+-- from cryptohash-cryptoapi
+import Crypto.Hash.CryptoAPI ( MD2, MD4, MD5, RIPEMD160, SHA1, SHA224
+                             , SHA256, SHA384, SHA512, Tiger )
 
 -- from skein
 import qualified Crypto.Skein as Skein
@@ -60,8 +50,6 @@ main = hspec $ do
   describe "cryptohash's SHA256"     $ testHash (undefined :: SHA256)
   describe "cryptohash's SHA384"     $ testHash (undefined :: SHA384)
   describe "cryptohash's SHA512"     $ testHash (undefined :: SHA512)
-  describe "cryptohash's Skein256"   $ testHash (undefined :: Skein256)
-  describe "cryptohash's Skein512"   $ testHash (undefined :: Skein512)
   describe "cryptohash's Tiger"      $ testHash (undefined :: Tiger)
   describe "skein's Skein_512_512"   $ testHash (undefined :: Skein.Skein_512_512)
   describe "skein's Skein_1024_1024" $ testHash (undefined :: Skein.Skein_1024_1024)
@@ -117,68 +105,68 @@ testBlockCipher undefinedKey = do
     testBlockCipherConduit
       (Just blockSize)
       (conduitEncryptEcb k)
-      (C.ecb k)
+      (CM.ecb k)
   prop "works with conduitDecryptEcb" $
     testBlockCipherConduit
       (Just blockSize)
       (conduitDecryptEcb k)
-      (C.unEcb k)
+      (CM.unEcb k)
 
   prop "works with conduitEncryptCbc" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptCbc k C.zeroIV)
-      (fst . C.cbc k C.zeroIV)
+      (conduitEncryptCbc k CM.zeroIV)
+      (fst . CM.cbc k CM.zeroIV)
   prop "works with conduitDecryptCbc" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptCbc k C.zeroIV)
-      (fst . C.unCbc k C.zeroIV)
+      (conduitDecryptCbc k CM.zeroIV)
+      (fst . CM.unCbc k CM.zeroIV)
 
   prop "works with conduitEncryptCfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptCfb k C.zeroIV)
-      (fst . C.cfb k C.zeroIV)
+      (conduitEncryptCfb k CM.zeroIV)
+      (fst . CM.cfb k CM.zeroIV)
   prop "works with conduitDecryptCfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptCfb k C.zeroIV)
-      (fst . C.unCfb k C.zeroIV)
+      (conduitDecryptCfb k CM.zeroIV)
+      (fst . CM.unCfb k CM.zeroIV)
 
   prop "works with conduitEncryptOfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptOfb k C.zeroIV)
-      (fst . C.ofb k C.zeroIV)
+      (conduitEncryptOfb k CM.zeroIV)
+      (fst . CM.ofb k CM.zeroIV)
   prop "works with conduitDecryptOfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptOfb k C.zeroIV)
-      (fst . C.unOfb k C.zeroIV)
+      (conduitDecryptOfb k CM.zeroIV)
+      (fst . CM.unOfb k CM.zeroIV)
 
   prop "works with conduitEncryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitEncryptCtr k C.zeroIV C.incIV)
-      (fst . C.ctr C.incIV k C.zeroIV)
+      (conduitEncryptCtr k CM.zeroIV CM.incIV)
+      (fst . CM.ctr CM.incIV k CM.zeroIV)
   prop "works with conduitDecryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitDecryptCtr k C.zeroIV C.incIV)
-      (fst . C.unCtr C.incIV k C.zeroIV)
+      (conduitDecryptCtr k CM.zeroIV CM.incIV)
+      (fst . CM.unCtr CM.incIV k CM.zeroIV)
 
   it "works with sourceCtr" $
     let len :: Num a => a
         len = 1024 * 1024 -- 1 MiB
-        r1 = runPureResource $ sourceCtr k C.zeroIV $$ isolate len =$ consumeAsLazy
-        r2 = fst $ C.ctr C.incIV k C.zeroIV (L.replicate len 0)
+        r1 = runPureResource $ sourceCtr k CM.zeroIV $$ isolate len =$ consumeAsLazy
+        r2 = fst $ CM.ctr CM.incIV k CM.zeroIV (L.replicate len 0)
     in r1 == r2
 
   prop "works with sinkCbcMac" $
     \input -> let inputL = fixBlockedSize blockSize (L.pack input)
                   r1 = runPureResource $ sourceList (L.toChunks inputL) $$ sinkCbcMac k
-                  r2 = B.concat $ L.toChunks $ C.cbcMac k inputL
+                  r2 = C.encode $ snd $ CM.cbc k CM.zeroIV inputL
               in r1 == r2
 
 
