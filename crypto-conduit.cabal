@@ -1,6 +1,6 @@
 Cabal-version:       >= 1.8
 Name:                crypto-conduit
-Version:             0.5.1
+Version:             0.5.2
 Synopsis:            Conduit interface for cryptographic operations (from crypto-api).
 Homepage:            https://github.com/meteficha/crypto-conduit
 License:             BSD3
@@ -41,7 +41,7 @@ Library
     Build-depends: crypto-api >= 0.8 && < 0.9
     CPP-options:   -DOLD_CRYPTO_API
   else
-    Build-depends: crypto-api >= 0.9 && < 0.12
+    Build-depends: crypto-api >= 0.9 && < 0.13
   GHC-options: -Wall
 
 Test-suite runtests
