@@ -148,19 +148,19 @@ testBlockCipher undefinedKey = do
   prop "works with conduitEncryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitEncryptCtr k CM.zeroIV CM.incIV)
-      (fst . CM.ctr CM.incIV k CM.zeroIV)
+      (conduitEncryptCtr k CM.zeroIV C.incIV)
+      (fst . CM.ctr C.incIV k CM.zeroIV)
   prop "works with conduitDecryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitDecryptCtr k CM.zeroIV CM.incIV)
-      (fst . CM.unCtr CM.incIV k CM.zeroIV)
+      (conduitDecryptCtr k CM.zeroIV C.incIV)
+      (fst . CM.unCtr C.incIV k CM.zeroIV)
 
   it "works with sourceCtr" $
     let len :: Num a => a
         len = 1024 * 1024 -- 1 MiB
         r1 = runPureResource $ sourceCtr k CM.zeroIV $$ isolate len =$ consumeAsLazy
-        r2 = fst $ CM.ctr CM.incIV k CM.zeroIV (L.replicate len 0)
+        r2 = fst $ CM.ctr C.incIV k CM.zeroIV (L.replicate len 0)
     in r1 == r2
 
   prop "works with sinkCbcMac" $

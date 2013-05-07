@@ -50,7 +50,7 @@ Test-suite runtests
     base,
     bytestring,
     cereal,
-    crypto-api   >= 0.11,
+    crypto-api   >= 0.12,
     conduit,
     transformers,
 
