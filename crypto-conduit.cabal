@@ -41,7 +41,7 @@ Library
     Build-depends: crypto-api >= 0.8 && < 0.9
     CPP-options:   -DOLD_CRYPTO_API
   else
-    Build-depends: crypto-api >= 0.9 && < 0.13
+    Build-depends: crypto-api >= 0.9 && < 0.14
   GHC-options: -Wall
 
 Test-suite runtests
@@ -50,7 +50,7 @@ Test-suite runtests
     base,
     bytestring,
     cereal,
-    crypto-api   >= 0.12,
+    crypto-api   >= 0.13,
     conduit,
     transformers,
 

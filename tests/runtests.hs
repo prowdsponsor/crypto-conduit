@@ -105,81 +105,81 @@ testBlockCipher undefinedKey = do
     testBlockCipherConduit
       (Just blockSize)
       (conduitEncryptEcb k)
-      (CM.ecb k)
+      (C.ecb k)
   prop "works with conduitDecryptEcb" $
     testBlockCipherConduit
       (Just blockSize)
       (conduitDecryptEcb k)
-      (CM.unEcb k)
+      (C.unEcb k)
 
   prop "works with conduitEncryptCbc" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptCbc k CM.zeroIV)
-      (fst . CM.cbc k CM.zeroIV)
+      (conduitEncryptCbc k C.zeroIV)
+      (fst . C.cbc k C.zeroIV)
   prop "works with conduitDecryptCbc" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptCbc k CM.zeroIV)
-      (fst . CM.unCbc k CM.zeroIV)
+      (conduitDecryptCbc k C.zeroIV)
+      (fst . C.unCbc k C.zeroIV)
 
   prop "works with conduitEncryptCfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptCfb k CM.zeroIV)
-      (fst . CM.cfb k CM.zeroIV)
+      (conduitEncryptCfb k C.zeroIV)
+      (fst . C.cfb k C.zeroIV)
   prop "works with conduitDecryptCfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptCfb k CM.zeroIV)
-      (fst . CM.unCfb k CM.zeroIV)
+      (conduitDecryptCfb k C.zeroIV)
+      (fst . C.unCfb k C.zeroIV)
 
   prop "works with conduitEncryptOfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitEncryptOfb k CM.zeroIV)
-      (fst . CM.ofb k CM.zeroIV)
+      (conduitEncryptOfb k C.zeroIV)
+      (fst . C.ofb k C.zeroIV)
   prop "works with conduitDecryptOfb" $
     testBlockCipherConduit
       (Just blockSize)
-      (conduitDecryptOfb k CM.zeroIV)
-      (fst . CM.unOfb k CM.zeroIV)
+      (conduitDecryptOfb k C.zeroIV)
+      (fst . C.unOfb k C.zeroIV)
 
   prop "works with conduitEncryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitEncryptCtr k CM.zeroIV C.incIV)
-      (fst . CM.ctr C.incIV k CM.zeroIV)
+      (conduitEncryptCtr k C.zeroIV C.incIV)
+      (fst . C.ctr k C.zeroIV)
   prop "works with conduitDecryptCtr" $
     testBlockCipherConduit
       Nothing
-      (conduitDecryptCtr k CM.zeroIV C.incIV)
-      (fst . CM.unCtr C.incIV k CM.zeroIV)
+      (conduitDecryptCtr k C.zeroIV C.incIV)
+      (fst . C.unCtr k C.zeroIV)
 
   it "works with sourceCtr" $
     let len :: Num a => a
         len = 1024 * 1024 -- 1 MiB
-        r1 = runPureResource $ sourceCtr k CM.zeroIV $$ isolate len =$ consumeAsLazy
-        r2 = fst $ CM.ctr C.incIV k CM.zeroIV (L.replicate len 0)
+        r1 = runPureResource $ sourceCtr k C.zeroIV $$ isolate len =$ consumeAsStrict
+        r2 = fst $ C.ctr k C.zeroIV (B.replicate len 0)
     in r1 == r2
 
   prop "works with sinkCbcMac" $
     \input -> let inputL = fixBlockedSize blockSize (L.pack input)
                   r1 = runPureResource $ sourceList (L.toChunks inputL) $$ sinkCbcMac k
-                  r2 = C.encode $ snd $ CM.cbc k CM.zeroIV inputL
+                  r2 = C.encode $ snd $ C.cbc k C.zeroIV $ B.pack input
               in r1 == r2
 
 
 testBlockCipherConduit ::
        Maybe C.ByteLength -- ^ Fix input length to be a multiple of the block size?
     -> (forall m. Monad m => Conduit B.ByteString m B.ByteString)
-    -> (L.ByteString -> L.ByteString)
+    -> (B.ByteString -> B.ByteString)
     -> [Word8]
     -> Bool
-testBlockCipherConduit mblockSize conduit lazyfun input =
+testBlockCipherConduit mblockSize conduit strictfun input =
     let inputL = maybe id fixBlockedSize mblockSize (L.pack input)
-        r1 = runPureResource $ sourceList (L.toChunks inputL) $$ conduit =$ consumeAsLazy
-        r2 = lazyfun inputL
+        r1 = runPureResource $ sourceList (L.toChunks inputL) $$ conduit =$ consumeAsStrict
+        r2 = strictfun $ B.pack input
     in r1 == r2
 
 
@@ -191,6 +191,9 @@ runPureResource r = runST r
 
 consumeAsLazy :: Monad m => Sink B.ByteString m L.ByteString
 consumeAsLazy = L.fromChunks <$> consume
+
+consumeAsStrict :: Monad m => Sink B.ByteString m B.ByteString
+consumeAsStrict = B.concat <$> consume
 
 fixBlockedSize :: C.ByteLength -> L.ByteString -> L.ByteString
 fixBlockedSize blockSize lbs =
