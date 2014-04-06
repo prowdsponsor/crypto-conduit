@@ -66,6 +66,9 @@ import Data.Conduit.Binary (sourceFile)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Class (lift)
 
+-- from resourcet
+import Control.Monad.Trans.Resource (runResourceT)
+
 
 -- | Helper to get our return type.
 getType :: Monad m => sink input m output -> output
