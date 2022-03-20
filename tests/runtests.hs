@@ -1,7 +1,7 @@
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE GADTs #-}
 
 -- from base
-import Control.Applicative ((<$>))
 import Control.Monad.ST (runST)
 import Data.Word (Word8)
 
@@ -13,10 +13,10 @@ import qualified Data.ByteString.Lazy as L
 import Crypto.Classes ((.::.))
 import qualified Crypto.Classes as C
 import qualified Crypto.HMAC as C
-import qualified Crypto.Modes as CM
+--import qualified Crypto.Modes as CM
 --import qualified Crypto.Padding as C
 --import qualified Crypto.Random as C
-import qualified Crypto.Types as C
+--import qualified Crypto.Types as C
 
 -- from conduit
 import Data.Conduit
@@ -29,6 +29,8 @@ import Crypto.Hash.CryptoAPI ( MD2, MD4, MD5, RIPEMD160, SHA1, SHA224
 
 -- from skein
 import qualified Crypto.Skein as Skein
+
+import qualified Crypto.Random.Types as CRT
 
 -- from hspec
 import Test.Hspec
@@ -68,7 +70,6 @@ main = hspec $ do
 
 ----------------------------------------------------------------------
 
-
 testHash :: C.Hash ctx d => d -> Spec
 testHash d = do
   prop "works with sinkHash" $
@@ -79,20 +80,19 @@ testHash d = do
 
 prop_sinkHash :: C.Hash ctx d => d -> L.ByteString -> Bool
 prop_sinkHash d input =
-    let d1 = runPureResource $ sourceList (L.toChunks input) $$ sinkHash
+    let d1 = runPureResource $ runConduit $ sourceList (L.toChunks input) .| sinkHash
         d2 = C.hashFunc d input
     in d1 == d2
 
 
 prop_sinkHmac :: C.Hash ctx d => d -> C.MacKey ctx d -> L.ByteString -> Bool
 prop_sinkHmac d mackey input =
-    let d1 = runPureResource $ sourceList (L.toChunks input) $$ sinkHmac mackey
+    let d1 = runPureResource $ runConduit $ sourceList (L.toChunks input) .| sinkHmac mackey
         d2 = C.hmac mackey input `asTypeOf` d
     in d1 == d2
 
 
 ----------------------------------------------------------------------
-
 
 testBlockCipher :: C.BlockCipher k => k -> Spec
 testBlockCipher undefinedKey = do
@@ -159,26 +159,26 @@ testBlockCipher undefinedKey = do
   it "works with sourceCtr" $
     let len :: Num a => a
         len = 1024 * 1024 -- 1 MiB
-        r1 = runPureResource $ sourceCtr k C.zeroIV $$ isolate len =$ consumeAsStrict
+        r1 = runPureResource $ runConduit $ sourceCtr k C.zeroIV .| isolate len .| consumeAsStrict
         r2 = fst $ C.ctr k C.zeroIV (B.replicate len 0)
     in r1 == r2
 
   prop "works with sinkCbcMac" $
     \input -> let inputL = fixBlockedSize blockSize (L.pack input)
-                  r1 = runPureResource $ sourceList (L.toChunks inputL) $$ sinkCbcMac k
+                  r1 = runPureResource $ runConduit $ sourceList (L.toChunks inputL) .| sinkCbcMac k
                   r2 = C.encode $ snd $ C.cbc k C.zeroIV $ B.pack input
               in r1 == r2
 
 
 testBlockCipherConduit ::
        Maybe C.ByteLength -- ^ Fix input length to be a multiple of the block size?
-    -> (forall m. Monad m => Conduit B.ByteString m B.ByteString)
+    -> (forall m. MonadFail m => ConduitT B.ByteString B.ByteString m () )
     -> (B.ByteString -> B.ByteString)
     -> [Word8]
     -> Bool
 testBlockCipherConduit mblockSize conduit strictfun input =
     let inputL = maybe id fixBlockedSize mblockSize (L.pack input)
-        r1 = runPureResource $ sourceList (L.toChunks inputL) $$ conduit =$ consumeAsStrict
+        r1 = runPureResource $ runConduit $ sourceList (L.toChunks inputL) .| conduit .| consumeAsStrict
         r2 = strictfun $ B.pack input
     in r1 == r2
 
@@ -186,13 +186,13 @@ testBlockCipherConduit mblockSize conduit strictfun input =
 ----------------------------------------------------------------------
 
 
-runPureResource :: (forall m. Monad m => m a) -> a
+runPureResource :: (forall m. MonadFail m => m a) -> a
 runPureResource r = runST r
 
-consumeAsLazy :: Monad m => Sink B.ByteString m L.ByteString
+consumeAsLazy :: MonadFail m => ConduitT B.ByteString Void m L.ByteString
 consumeAsLazy = L.fromChunks <$> consume
 
-consumeAsStrict :: Monad m => Sink B.ByteString m B.ByteString
+consumeAsStrict :: MonadFail m => ConduitT B.ByteString Void m B.ByteString
 consumeAsStrict = B.concat <$> consume
 
 fixBlockedSize :: C.ByteLength -> L.ByteString -> L.ByteString
