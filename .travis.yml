@@ -1,4 +1,4 @@
 language: haskell
 install:
   - cabal update
-  - cabal install bytestring cereal conduit transformers crypto-api cryptocipher cryptohash skein hspec
+  - cabal install --dependencies-only --enable-tests
