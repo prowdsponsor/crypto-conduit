@@ -53,13 +53,13 @@ import qualified Data.Serialize as S
 import Crypto.Classes ((.::.))
 import qualified Crypto.Classes as C
 import qualified Crypto.HMAC as C
-import qualified Crypto.Modes as C
+-- import qualified Crypto.Modes as C
 --import qualified Crypto.Padding as C
 --import qualified Crypto.Random as C
-import qualified Crypto.Types as C
+-- import qualified Crypto.Types as C
 
 -- from conduit
-import Data.Conduit
+import Data.Conduit(ConduitT, await, yield, leftover, runConduit, (.|))
 import Data.Conduit.Binary (sourceFile)
 
 -- from transformers
@@ -80,7 +80,7 @@ getType = undefined
 
 -- | A 'Sink' that hashes a stream of 'B.ByteString'@s@ and
 -- creates a digest @d@.
-sinkHash :: (Monad m, C.Hash ctx d) => Consumer B.ByteString m d
+sinkHash :: (Monad m, C.Hash ctx d) => forall o. ConduitT B.ByteString o m d
 sinkHash =
     self
   where
@@ -95,7 +95,7 @@ sinkHash =
 
     blockSize = (C.blockLength .::. getType self) `div` 8
 
-getBlock :: Monad m => BlockMode -> C.ByteLength -> Consumer B.ByteString m Block
+getBlock :: Monad m => BlockMode -> C.ByteLength -> forall o. ConduitT B.ByteString o m Block
 getBlock blockMode blockSize =
     go id
   where
@@ -125,7 +125,8 @@ getBlock blockMode blockSize =
 -- hashFile fp = 'liftIO' $ 'runResourceT' ('sourceFile' fp '$$' 'sinkHash')
 -- @
 hashFile :: (MonadIO m, C.Hash ctx d) => FilePath -> m d
-hashFile fp = liftIO $ runResourceT (sourceFile fp $$ sinkHash)
+-- hashFile fp = liftIO $ runResourceT (sourceFile fp $$ sinkHash)
+hashFile fp = liftIO $ runResourceT $ runConduit $ sourceFile fp .| sinkHash
 
 
 ----------------------------------------------------------------------
@@ -139,7 +140,7 @@ sinkHmac :: (Monad m, C.Hash ctx d) =>
 #else
             C.MacKey ctx d
 #endif
-         -> Consumer B.ByteString m d
+         -> forall o. ConduitT B.ByteString o m d
 sinkHmac (C.MacKey key) =
       sink
   where
@@ -181,9 +182,9 @@ sinkHmac (C.MacKey key) =
 -- the block size of the cipher and fails otherwise.  (Note that
 -- ECB has many undesirable cryptographic properties, please
 -- avoid it if you don't know what you're doing.)
-conduitEncryptEcb :: (Monad m, C.BlockCipher k) =>
+conduitEncryptEcb :: (MonadFail m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitEncryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -195,9 +196,9 @@ conduitEncryptEcb k =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using ECB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptEcb :: (Monad m, C.BlockCipher k) =>
+conduitDecryptEcb :: (MonadFail m, C.BlockCipher k) =>
                      k -- ^ Cipher key.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitDecryptEcb k =
     blockCipherConduit k
       AnyMultiple
@@ -212,10 +213,10 @@ conduitDecryptEcb k =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using CBC mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptCbc :: (Monad m, C.BlockCipher k) =>
+conduitEncryptCbc :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitEncryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -228,10 +229,10 @@ conduitEncryptCbc k iv =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using CBC mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptCbc :: (Monad m, C.BlockCipher k) =>
+conduitDecryptCbc :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitDecryptCbc k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -247,10 +248,10 @@ conduitDecryptCbc k iv =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using CFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptCfb :: (Monad m, C.BlockCipher k) =>
+conduitEncryptCfb :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitEncryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -263,10 +264,10 @@ conduitEncryptCfb k iv =
 -- | A 'Conduit' that decrypts a stream of 'B.ByteString'@s@
 -- using CFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitDecryptCfb :: (Monad m, C.BlockCipher k) =>
+conduitDecryptCfb :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitDecryptCfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -282,10 +283,10 @@ conduitDecryptCfb k iv =
 -- | A 'Conduit' that encrypts a stream of 'B.ByteString'@s@
 -- using OFB mode.  Expects the input length to be a multiple of
 -- the block size of the cipher and fails otherwise.
-conduitEncryptOfb :: (Monad m, C.BlockCipher k) =>
+conduitEncryptOfb :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitEncryptOfb k iv =
     blockCipherConduit k
       StrictBlockSize
@@ -297,10 +298,10 @@ conduitEncryptOfb k iv =
 
 -- | Synonym for 'conduitEncryptOfb', since for OFB mode both
 -- encryption and decryption are the same.
-conduitDecryptOfb :: (Monad m, C.BlockCipher k) =>
+conduitDecryptOfb :: (MonadFail m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitDecryptOfb = conduitEncryptOfb
 
 
@@ -314,7 +315,7 @@ conduitEncryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitEncryptCtr k iv incIV =
     blockCipherConduit k
       StrictBlockSize
@@ -332,7 +333,7 @@ conduitDecryptCtr :: (Monad m, C.BlockCipher k) =>
                      k      -- ^ Cipher key.
                   -> C.IV k -- ^ Initialization vector.
                   -> (C.IV k -> C.IV k) -- ^ Increment counter ('C.incIV' is recommended)
-                  -> Conduit B.ByteString m B.ByteString
+                  -> ConduitT B.ByteString B.ByteString m ()
 conduitDecryptCtr = conduitEncryptCtr
 
 
@@ -341,7 +342,8 @@ conduitDecryptCtr = conduitEncryptCtr
 sourceCtr :: (Monad m, C.BlockCipher k) =>
              k      -- ^ Cipher key.
           -> C.IV k -- ^ Initialization vector.
-          -> Producer m B.ByteString
+          -- -> Producer m B.ByteString
+          -> ConduitT i0 B.ByteString m b
 sourceCtr k =
     loop
   where
@@ -361,9 +363,9 @@ sourceCtr k =
 -- the input length to be a multiple of the block size of the
 -- cipher and fails otherwise.  (Note that CBC-MAC is not secure
 -- for variable-length messages.)
-sinkCbcMac :: (Monad m, C.BlockCipher k) =>
+sinkCbcMac :: (MonadFail m, C.BlockCipher k) =>
               k -- ^ Cipher key.
-           -> Consumer B.ByteString m B.ByteString
+           -> forall o. ConduitT B.ByteString o m B.ByteString
 sinkCbcMac k =
       go $ B.replicate blockSize 0
     where
@@ -393,7 +395,7 @@ sinkCbcMac k =
 blocked :: Monad m =>
            BlockMode
         -> C.ByteLength -- ^ Block size
-        -> Conduit B.ByteString m Block
+        -> ConduitT B.ByteString Block m ()
 blocked mode blockSize = go B.empty
     where
       go x = await >>= maybe (close x) (push x)
@@ -442,7 +444,7 @@ blockCipherConduit :: (Monad m, C.BlockCipher k) =>
                    -> s -- ^ Initial state.
                    -> (s -> B.ByteString -> (s, B.ByteString))        -- ^ Encrypt block.
                    -> (s -> B.ByteString -> m B.ByteString) -- ^ Final encryption.
-                   -> Conduit B.ByteString m B.ByteString
+                   -> ConduitT B.ByteString B.ByteString m ()
 blockCipherConduit key mode initialState apply final =
       go initialState
     where
